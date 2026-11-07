@@ -4,6 +4,8 @@
   "_data": "Where prices come from. auto tries Binance, then Bybit, then Hyperliquid, and keeps the first that answers from your location.",
   "venue": "auto",
   "display_tz": "UTC",
+  "_risk_day": "null: the risk day still resets at midnight in display_tz. \"UTC\": midnight UTC, so Asia/Kuala_Lumpur can be the printed clock without moving the risk day.",
+  "risk_day_tz": null,
   "session": "utc",
   "min_quote_volume_usd": 20000000,
   "min_listing_days": 14,
@@ -42,5 +44,31 @@
   "live_venue": "binance",
 
   "_news": "null: crypto-news reads its built-in outlets (CoinDesk, Cointelegraph, Decrypt, The Block, CryptoSlate, Bitcoin Magazine, BeInCrypto). Or a list of RSS or Atom feed URLs, or [name, url] pairs, to read instead.",
-  "news_feeds": null
+  "news_feeds": null,
+
+  "_paper_profile": "tools/auto_paper.py only: a fresh simulated account. It never places an order. Live orders keep max_daily_loss_usd (30) and max_trades_per_day (4) above, and still need a ticket plus a typed yes. Risk per trade is min(risk_pct of this experiment's equity, max_loss_per_trade_usd).",
+  "paper_profile": {
+    "experiment": "syed-v1 paper",
+    "rules": "syed-v1",
+    "start_equity_usd": 1000,
+    "risk_pct": 0.01,
+    "max_loss_per_trade_usd": 10,
+    "max_daily_loss_usd": 100,
+    "max_trades_per_day": 1000000,
+    "max_open_positions": 2,
+    "max_cost_r": 0.2,
+    "cooldown_after_losses": 2,
+    "cooldown_hours": 12,
+    "min_liq_buffer": 2.0,
+    "max_margin_pct": 50,
+    "min_reward_risk": 1.5,
+    "max_leverage": 3,
+    "margin_mode": "isolated",
+    "allow_cross_margin": false,
+    "allow_short": true,
+    "require_stop": true,
+    "max_hold_hours": 24,
+    "risk_day_tz": "UTC",
+    "decision_minutes": 15
+  }
 }

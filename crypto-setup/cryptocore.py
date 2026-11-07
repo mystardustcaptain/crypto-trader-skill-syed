@@ -322,6 +322,8 @@ DEFAULTS = {
     # where data comes from
     "venue": "auto",                 # auto, binance, bybit or hyperliquid
     "display_tz": "UTC",             # "+11:00" or an IANA name such as "Australia/Melbourne"
+    # null: the risk day still resets at midnight in display_tz. "UTC": midnight UTC, whatever the clock shows.
+    "risk_day_tz": None,
     "session": "utc",                # opening-range session: utc, tokyo, london or ny
     "min_quote_volume_usd": 20000000,
     "min_listing_days": 14,
@@ -353,6 +355,31 @@ DEFAULTS = {
     "blocked": [],
     # news (crypto-news)
     "news_feeds": None,              # None: the built-in outlets; or a list of feed URLs, or [name, url] pairs
+    # tools/auto_paper.py only. Live orders keep the limits above and still need a ticket plus a typed yes.
+    "paper_profile": {
+        "experiment": "syed-v1 paper",
+        "rules": "syed-v1",
+        "start_equity_usd": 1000,
+        "risk_pct": 0.01,            # per trade: min(this fraction of experiment equity, max_loss_per_trade_usd)
+        "max_loss_per_trade_usd": 10,
+        "max_daily_loss_usd": 100,
+        "max_trades_per_day": 1000000,
+        "max_open_positions": 2,
+        "max_cost_r": 0.2,
+        "cooldown_after_losses": 2,
+        "cooldown_hours": 12,
+        "min_liq_buffer": 2.0,
+        "max_margin_pct": 50,
+        "min_reward_risk": 1.5,
+        "max_leverage": 3,
+        "margin_mode": "isolated",
+        "allow_cross_margin": False,
+        "allow_short": True,
+        "require_stop": True,
+        "max_hold_hours": 24,
+        "risk_day_tz": "UTC",
+        "decision_minutes": 15,      # a signal older than this (or its own bar, if longer) is stale
+    },
 }
 
 _CONFIG_CACHE = {}
@@ -2073,7 +2100,9 @@ def track_record():
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), TRACK_FILE)
     for path in (wpath(TRACK_FILE), here):
         try:
-            key = (os.path.abspath(path), os.path.getmtime(path))
+            st = os.stat(path)
+            # Size as well as mtime: a coarse clock can stamp two writes with the same mtime.
+            key = (os.path.abspath(path), st.st_mtime, st.st_size)
         except OSError:
             continue
         if key not in _TRACK:
@@ -2228,11 +2257,24 @@ def floor_step(qty, step):
 
 
 def day_start(at_ms=None, tzname=None):
-    """Start of the user's day (in display_tz) containing at_ms, as UTC ms."""
+    """Start of the day containing at_ms in tzname, as UTC ms. tzname defaults to the risk day zone."""
     at_ms = now_ms() if at_ms is None else at_ms
-    tzname = tzname if tzname is not None else load_config().get("display_tz", "UTC")
+    tzname = risk_day_zone() if tzname is None else tzname
     off = _tz_offset_minutes(at_ms, tzname) * 60000
     return ((at_ms + off) // DAY_MS) * DAY_MS - off
+
+
+def risk_day_zone(cfg=None):
+    """Time zone whose midnight starts the risk day.
+
+    `risk_day_tz` when it is set, otherwise `display_tz`. Leaving `risk_day_tz` empty keeps the
+    older behaviour, where the risk day followed the display clock.
+    """
+    cfg = cfg or load_config()
+    tz = cfg.get("risk_day_tz")
+    if isinstance(tz, str) and tz.strip():
+        return tz.strip()
+    return cfg.get("display_tz") or "UTC"
 
 
 def read_positions():
@@ -2246,10 +2288,13 @@ def read_ledger():
 
 def today_stats(cfg=None, at_ms=None):
     """What the risk rules need from the trade log: today's entries, today's net result,
-    open positions and the risk still on them, and the latest closed trades."""
+    open positions and the risk still on them, and the latest closed trades.
+
+    Today's midnight is the risk day (`risk_day_tz`), not the display clock, when the two differ.
+    """
     cfg = cfg or load_config()
     at_ms = now_ms() if at_ms is None else at_ms
-    start = day_start(at_ms, cfg.get("display_tz", "UTC"))
+    start = day_start(at_ms, risk_day_zone(cfg))
     led = read_ledger()
     entries = [e for e in led if e.get("type") == "open" and start <= e.get("at", 0) <= at_ms]
     closes_ = [e for e in led if e.get("type") == "close"]

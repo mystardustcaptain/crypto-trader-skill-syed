@@ -89,8 +89,12 @@ order, the plan's entry or the price now, whichever is worse for this side.
 A plan written at 15:15 cannot understate the risk at 15:45 after the price
 ran.
 
-**The day** starts at midnight in `display_tz` (UTC by default; set
-`"display_tz": "Australia/Melbourne"` and the day is the user's own day).
+**The day** starts at midnight in `risk_day_tz` when that is set, and
+otherwise at midnight in `display_tz` (UTC by default). Leave
+`risk_day_tz` empty and `"display_tz": "Australia/Melbourne"` still makes
+the risk day the user's own day. Set `"risk_day_tz": "UTC"` and the risk
+day stays on UTC midnight while `display_tz` only changes printed times
+(`"Asia/Kuala_Lumpur"`, for example).
 
 **Warnings** do not block, but say them: a thin coin, funding of 50% a year
 or more against the side (with its cost a day at this size), a LIVE account,

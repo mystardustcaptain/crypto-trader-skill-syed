@@ -105,7 +105,9 @@ Blocked here: Binance USD-M futures. That is the exchange's rule for this locati
 R; 0 turns the rule off), `max_leverage` (3), `margin_mode` (isolated), `allow_cross_margin` (false),
 `min_liq_buffer` (2.0: liquidation at least twice as far as the stop),
 `cooldown_after_losses` (2) and `cooldown_hours` (12), `paper` (true),
-`live_venue`, `display_tz` ("+11:00" or "Australia/Melbourne"), `session`
+`live_venue`, `display_tz` ("+11:00" or "Australia/Melbourne"),
+`risk_day_tz` (empty: the risk day follows `display_tz`; `"UTC"`: midnight
+UTC even when the printed clock is `Asia/Kuala_Lumpur`), `session`
 for opening ranges (utc, tokyo, london, ny), `min_quote_volume_usd`
 (20 million), `min_listing_days` (14), `exclude`.
 

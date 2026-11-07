@@ -381,6 +381,7 @@ python3 crypto-broker/broker.py ticket                  # the ticket, READY or n
 python3 crypto-alerts/alerts.py add --from-plan         # stop, target, time limit
 python3 crypto-journal/journal.py                       # how it is going, honestly
 python3 tools/backtest.py                               # every setup replayed on the last 90 days, walk-forward
+python3 tools/auto_paper.py                             # paper-only experiment, one JSON line; for a 15-minute scheduler
 ```
 
 The market tools take `--venue binance|bybit|hyperliquid`, and most take
@@ -404,8 +405,60 @@ first:
 | `max_leverage` | 3 | leverage cap; `margin_mode` stays isolated |
 | `cooldown_after_losses` | 2 | losses in a row before a 12-hour pause |
 | `paper` | true | simulated fills at live prices; `false` only when you mean it |
-| `display_tz` | UTC | your time zone for printed times: `"Australia/Melbourne"`, `"America/New_York"` or an offset like `"+11:00"` |
+| `display_tz` | UTC | your time zone for printed times: `"Australia/Melbourne"`, `"Asia/Kuala_Lumpur"` or an offset like `"+11:00"` |
+| `risk_day_tz` | null | midnight that resets the risk day. Empty: follow `display_tz` (the older behaviour). `"UTC"`: UTC midnight even when the printed clock is somewhere else |
+| `paper_profile` | syed-v1 paper | simulated account for `tools/auto_paper.py` only. Live orders keep the limits above |
 | `session` | utc | the opening range to trade: `utc`, `tokyo`, `london` or `ny` |
+
+## Automated paper experiment
+
+`tools/auto_paper.py` is a separate simulation for a fresh experiment named
+**syed-v1 paper**. It is not the broker. The broker still shows a ticket and
+still waits for a typed yes before anything that can reach an exchange. This
+tool never calls that path, never reads API keys, and refuses to start when
+`"paper"` is false or `--live` is passed.
+
+Each run scans the default setups, long and short, including the 30-minute
+opening range and the session in your config. It takes a signal only while
+the entry rules still call it a fresh trigger, and it drops anything older
+than 15 minutes or older than that setup's own bar. Stops, targets and the
+time limit are played forward on 1-minute bars that opened after the fill
+and had closed by this run, so a later bar cannot leak in. Fills walk the
+book and pay the same fees and slippage the pack uses everywhere else.
+The ledger is append-only:
+
+`crypto/experiments/syed-v1/ledger.jsonl`
+
+It starts at 1000 USDT of simulated capital and is not the broker's
+`crypto/ledger.jsonl`. The tool never truncates it. Running it again in the
+same bar does not open the same signal twice.
+
+Risk per trade is 1% of this experiment's current equity, capped at 10 USDT.
+The paper profile allows 100 USDT of loss in a UTC day and does not cap the
+number of trades. Live orders stay at 30 USDT and 4 trades a day. The
+experiment's risk day is UTC midnight (`paper_profile.risk_day_tz`), so
+`"display_tz": "Asia/Kuala_Lumpur"` only changes printed times. Set the
+top-level `risk_day_tz` to `"UTC"` if crypto-risk should use that same
+midnight; leave it empty and crypto-risk keeps following `display_tz`.
+
+Market data is Binance USDT-M first, then the usual fallback. Each trade
+records which venue answered. The rules string on every trade is `syed-v1`.
+
+A scheduler runs this, and only this:
+
+```bash
+python3 tools/auto_paper.py
+```
+
+Stdout is one JSON line: how many positions opened and closed, how many are
+still open, today's realized pnl, equity, which limits blocked a candidate,
+and why other signals were skipped. This line is from the offline test
+market with `"session": "ny"`, ORBX only, at 14:30 UTC, ten minutes after
+the planted New York break (`duplicate` is a second setup on the same coin):
+
+```json
+{"experiment":"syed-v1 paper","rules":"syed-v1","new":1,"closed":0,"open":1,"day_pnl":0.0,"equity":999.65,"limit_hits":["duplicate"],"skip_reasons":{"duplicate":1},"venue":"binance","at_utc":"2026-10-21 14:30 UTC","paper":true}
+```
 
 ## Tests
 
@@ -517,7 +570,7 @@ crypto-risk/         SKILL.md, check.py
 crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
-tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest; chart.py: the chart at the top, drawn from the trades
+tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest; chart.py: the chart at the top, drawn from the trades; auto_paper.py: the unattended paper experiment
 docs/                the chart at the top, light and dark, and the card shown when the repo is shared
 backtest/            the published backtests: both runs' reports and trades (CSV, gzipped), the checks and pooled reports
 tests/               unittest suite, a fake exchange, real recorded responses
